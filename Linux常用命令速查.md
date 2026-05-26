@@ -2005,3 +2005,399 @@ while true; do curl -s -o /dev/null -w "%{http_code}" https://site.com; sleep 60
 > - 善用 `command --help` 查看简短帮助
 > - 善用 `tldr command` 查看常用示例（需安装 tldr）
 > - 善用 `type command` 确认命令类型（别名/内置/外部）
+
+
+
+---
+
+## 19. 每个命令的常用组合
+
+> 按命令分类，列出日常工作中最实用的管道组合和联合用法。
+
+---
+
+### ls 组合
+
+```bash
+ls -lhS | head -10              # 列出当前目录最大的10个文件
+ls -lt | head -20               # 最近修改的20个文件
+ls -la | grep "^d"              # 只列出目录
+ls -la | grep "^-"              # 只列出普通文件
+ls -lR | grep "\.py$"           # 递归列出所有.py文件
+ls -1 | wc -l                   # 统计当前目录文件数量
+ls -la --time=atime             # 按访问时间显示
+```
+
+---
+
+### find 组合
+
+```bash
+find . -name "*.log" -size +100M                    # 找出大于100M的日志
+find . -name "*.py" -exec grep -l "import os" {} \; # 找含特定内容的文件
+find . -mtime -1 -type f                            # 24小时内修改的文件
+find . -empty -type f -delete                       # 删除所有空文件
+find . -name "*.tmp" -mtime +7 -delete              # 删除7天前的临时文件
+find . -type f -name "*.sh" -exec chmod +x {} +     # 给所有.sh加执行权限
+find . -type f | xargs grep -l "TODO"               # 找包含TODO的文件
+find / -user root -perm -4000 2>/dev/null           # 找所有SUID文件
+find . -name "node_modules" -type d -prune -exec rm -rf {} + # 删除所有node_modules
+find . -type f -printf "%s %p\n" | sort -rn | head -10       # 找最大的10个文件
+```
+
+---
+
+### grep 组合
+
+```bash
+grep -rn "error" . | grep -v "node_modules"         # 搜索但排除目录
+grep -rn "TODO\|FIXME\|HACK" src/                   # 搜多个关键词
+grep -c "error" *.log | grep -v ":0$"               # 找含error的文件及次数
+grep -rl "old_api" . | xargs sed -i 's/old_api/new_api/g'  # 批量替换
+ps aux | grep nginx | grep -v grep                  # 查进程（排除grep自身）
+cat access.log | grep "404" | awk '{print $7}' | sort | uniq -c | sort -rn  # 统计404的URL
+history | grep "git" | tail -20                     # 最近20条git相关命令
+dmesg | grep -i "error\|fail\|warn"                 # 内核日志中的错误
+grep -P "\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}" file  # 提取IP地址
+netstat -an | grep "ESTABLISHED" | wc -l            # 统计已建立的连接数
+```
+
+---
+
+### awk 组合
+
+```bash
+awk '{print $1}' access.log | sort | uniq -c | sort -rn | head -20   # 访问量TOP20 IP
+df -h | awk '$5 > "80%" {print $0}'                                  # 磁盘使用超80%的分区
+ps aux | awk '$3 > 50 {print $0}'                                    # CPU占用超50%的进程
+ps aux | awk '{mem += $6} END {print mem/1024 " MB"}'                # 总内存占用
+awk -F: '$3 >= 1000 {print $1}' /etc/passwd                          # 列出普通用户
+cat access.log | awk '{print $4}' | cut -d: -f2 | sort | uniq -c     # 每小时访问量
+awk '/error/{count++} END{print count}' app.log                      # 统计error出现次数
+ls -l | awk '{total += $5} END {print total/1024/1024 " MB"}'        # 目录总大小
+awk 'NR>=10 && NR<=20' file.txt                                      # 打印第10到20行
+netstat -an | awk '/^tcp/ {print $6}' | sort | uniq -c | sort -rn   # TCP状态统计
+```
+
+---
+
+### sed 组合
+
+```bash
+sed -i 's/http:/https:/g' *.html                    # 批量替换http为https
+sed -n '10,20p' file.txt                            # 打印第10到20行
+sed -i '/^$/d' file.txt                             # 删除所有空行
+sed -i '/^#/d' config.conf                          # 删除所有注释行
+sed -i '1i#!/bin/bash' script.sh                    # 在文件开头插入一行
+sed -i '$a# End of file' file.txt                   # 在文件末尾追加
+sed 's/[[:space:]]*$//' file.txt                    # 删除行尾空白
+find . -name "*.py" -exec sed -i 's/old/new/g' {} + # 递归批量替换
+sed -n '/START/,/END/p' file.txt                    # 打印两个标记之间的内容
+sed -i.bak 's/foo/bar/g' file && rm file.bak        # 替换并清理备份
+```
+
+---
+
+### xargs 组合
+
+```bash
+find . -name "*.pyc" -print0 | xargs -0 rm -f       # 安全删除（处理空格文件名）
+cat urls.txt | xargs -n 1 -P 5 wget                 # 5个并发下载
+echo "file1 file2 file3" | xargs -n 1 cp -t /dest/  # 批量复制到目标
+find . -name "*.jpg" | xargs -I {} cp {} /backup/    # 批量备份图片
+docker ps -q | xargs docker stop                     # 停止所有容器
+git branch --merged | grep -v "main" | xargs git branch -d  # 删除已合并分支
+find . -name "*.gz" | xargs -P 4 gunzip              # 4进程并行解压
+cat hosts.txt | xargs -I {} ssh {} "uptime"          # 批量检查服务器
+ps aux | grep zombie | awk '{print $2}' | xargs kill # 杀掉僵尸进程
+```
+
+---
+
+### ps / kill 组合
+
+```bash
+ps aux --sort=-%mem | head -10                       # 内存占用TOP10
+ps aux --sort=-%cpu | head -10                       # CPU占用TOP10
+ps -ef | grep python | grep -v grep | awk '{print $2}' | xargs kill  # 杀掉所有python进程
+ps aux | awk '{print $2, $4, $11}' | sort -k2 -rn | head  # 按内存排序显示进程
+pgrep -f "app.py" | xargs kill -9                    # 按命令名强制杀
+ps -eo pid,ppid,cmd,%mem,%cpu --sort=-%mem | head    # 自定义输出列
+watch -n 1 "ps aux --sort=-%cpu | head -5"           # 实时监控CPU最高进程
+ps aux | awk 'NR>1{a[$1]+=$6} END{for(i in a) print a[i]/1024"MB", i}' | sort -rn  # 按用户统计内存
+```
+
+---
+
+### tail / head / cat 组合
+
+```bash
+tail -f /var/log/syslog | grep --line-buffered "error"   # 实时过滤日志
+tail -f log1.log log2.log                                # 同时跟踪多个日志
+head -100 big.csv | column -t -s ","                     # 格式化预览CSV
+cat file.txt | tr ',' '\n'                               # 逗号分隔转换为每行一个
+cat /dev/null > large.log                                # 清空日志不删文件
+tail -n +2 data.csv                                      # 跳过表头（从第2行开始）
+head -1 data.csv && tail -n +2 data.csv | sort -t',' -k2 # 保留表头排序
+cat access.log | cut -d' ' -f1 | sort -u | wc -l        # 统计独立IP数
+tac file.txt                                             # 倒序显示文件（最后一行在前）
+cat -n script.py | grep "def "                           # 带行号显示函数定义
+```
+
+---
+
+### sort / uniq 组合
+
+```bash
+sort file.txt | uniq -c | sort -rn                  # 统计频率并排序
+cut -d',' -f2 data.csv | sort | uniq -c | sort -rn  # 统计CSV某列的值分布
+cat access.log | awk '{print $1}' | sort | uniq -c | sort -rn | head -20  # IP访问排行
+comm -13 <(sort file1) <(sort file2)                # 在file2中但不在file1中的行
+sort -t'.' -k1,1n -k2,2n -k3,3n -k4,4n ips.txt     # IP地址排序
+paste -d',' file1 file2 | sort -t',' -k2 -rn        # 合并文件后按第2列排序
+```
+
+---
+
+### du / df 组合
+
+```bash
+du -h --max-depth=1 / 2>/dev/null | sort -rh | head -15    # 根目录下最大目录
+du -sh /var/log/* | sort -rh | head -10                    # 最大的日志文件
+df -h | awk '$5+0 > 80'                                    # 使用率超80%的分区
+watch -n 60 "df -h | grep '/dev/sda1'"                     # 持续监控磁盘使用
+du -ah . 2>/dev/null | sort -rh | head -20                 # 当前目录最大的20个文件/目录
+find / -xdev -type f -size +500M 2>/dev/null               # 全盘找大文件
+ncdu /                                                      # 交互式磁盘分析（需安装）
+```
+
+---
+
+### chmod / chown 组合
+
+```bash
+find . -type f -exec chmod 644 {} +                  # 所有文件设为644
+find . -type d -exec chmod 755 {} +                  # 所有目录设为755
+find /var/www -type f -exec chmod 644 {} + && find /var/www -type d -exec chmod 755 {} +  # Web目录标准权限
+chown -R www-data:www-data /var/www/html             # Web目录归属
+find . -name "*.sh" -exec chmod +x {} +              # 所有脚本加执行权限
+chmod 600 ~/.ssh/id_rsa                              # SSH私钥安全权限
+stat -c "%a %n" *                                    # 显示所有文件的数字权限
+```
+
+---
+
+### tar / zip 组合
+
+```bash
+tar -czf backup_$(date +%Y%m%d).tar.gz /data/       # 带日期的备份
+tar -czf - dir/ | ssh user@host "cat > backup.tar.gz"  # 打包直接传到远程
+tar -xzf file.tar.gz -C /target/ --strip-components=1  # 解压去掉一层目录
+find . -name "*.log" -mtime +30 | tar -czf old_logs.tar.gz -T -  # 打包30天前的日志
+tar -czf backup.tar.gz --exclude="*.log" --exclude="node_modules" .  # 排除多种文件
+zip -r deploy.zip . -x "*.git*" -x "node_modules/*"  # 打包部署文件
+```
+
+---
+
+### ssh / scp / rsync 组合
+
+```bash
+ssh user@host "cd /app && git pull && systemctl restart app"  # 远程部署
+ssh user@host "tar czf - /data" > local_backup.tar.gz        # 远程打包本地保存
+rsync -avz --delete --exclude=".git" ./src/ user@host:/app/  # 同步代码（删除多余）
+rsync -avz -e "ssh -p 2222" src/ user@host:dest/            # 指定端口同步
+ssh -t user@jump "ssh user@internal"                          # 通过跳板机连接
+scp -r user@host:/var/log/app/ ./logs/                       # 批量下载远程日志
+for host in host1 host2 host3; do ssh $host "uptime"; done   # 批量检查
+```
+
+---
+
+### systemctl / journalctl 组合
+
+```bash
+systemctl list-units --failed                                # 查看失败的服务
+systemctl restart nginx && systemctl status nginx            # 重启并确认状态
+journalctl -u nginx --since "1 hour ago" | grep error       # 最近1小时nginx错误
+journalctl -u app -f | grep --line-buffered "Exception"     # 实时监控异常
+systemctl list-units --type=service --state=running          # 列出运行中的服务
+journalctl --disk-usage && journalctl --vacuum-size=500M    # 查看并清理日志
+systemctl show nginx -p ActiveState                          # 快速检查服务状态
+```
+
+---
+
+### curl / wget 组合
+
+```bash
+curl -s https://api.example.com | python3 -m json.tool      # 格式化JSON响应
+curl -o /dev/null -s -w "%{http_code}\n" https://site.com   # 只看状态码
+curl -X POST -H "Content-Type: application/json" -d '{"key":"val"}' url  # POST JSON
+while true; do curl -s -o /dev/null -w "%{http_code} %{time_total}s\n" url; sleep 5; done  # 持续探测
+wget -r -l 1 -A "*.pdf" https://example.com/docs/           # 下载某页所有PDF
+curl -u user:pass ftp://host/file.txt -o file.txt           # FTP下载
+curl -I -L url 2>/dev/null | grep "^HTTP\|^Location"        # 跟踪重定向链
+```
+
+---
+
+### docker 常用组合（补充）
+
+```bash
+docker ps -q | xargs docker stop                             # 停止所有容器
+docker images -q -f "dangling=true" | xargs docker rmi       # 删除悬空镜像
+docker system prune -af                                      # 清理所有未使用资源
+docker logs -f --tail 100 container_name                     # 跟踪最近100行日志
+docker exec -it container_name /bin/bash                     # 进入容器
+docker stats --no-stream                                     # 容器资源快照
+docker cp container:/path/file ./local/                      # 从容器复制文件
+docker-compose up -d && docker-compose logs -f               # 启动并跟踪日志
+```
+
+---
+
+### git 常用组合（补充）
+
+```bash
+git log --oneline --graph -20                                # 可视化最近20条提交
+git diff --stat HEAD~5                                       # 最近5次提交的修改统计
+git stash && git pull && git stash pop                       # 暂存→拉取→恢复
+git branch -a | grep -v "main\|master" | xargs git branch -D  # 删除所有本地分支
+git log --author="name" --since="1 week ago" --oneline       # 某人最近一周提交
+git log --all --full-history -- "**/filename"                 # 查找文件历史
+git reset --soft HEAD~1                                      # 撤销上次提交保留修改
+git clean -fd && git checkout .                              # 清理所有未跟踪和修改
+```
+
+---
+
+### 网络排查组合
+
+```bash
+ss -tulnp | grep LISTEN                                      # 所有监听端口
+ping -c 3 host && traceroute host                            # 连通性+路由
+curl -s ifconfig.me                                          # 查看公网IP
+nslookup domain && dig domain +short                         # DNS双重验证
+ss -s                                                        # 网络连接统计摘要
+iptables -L -n --line-numbers                                # 带行号的防火墙规则
+tcpdump -i eth0 port 80 -c 100                              # 抓取80端口前100个包
+netstat -ant | awk '{print $6}' | sort | uniq -c | sort -rn  # 连接状态统计
+lsof -i :3306                                                # 谁在用3306端口
+ip route get 8.8.8.8                                         # 查看到某IP走哪个网卡
+```
+
+---
+
+### 系统监控组合
+
+```bash
+top -bn1 | head -20                                          # 非交互式取top快照
+free -h && echo "---" && df -h                               # 内存+磁盘一起看
+vmstat 1 5                                                   # 5秒系统性能快照
+iostat -x 1 3                                                # 磁盘IO监控
+uptime && who && last -5                                     # 快速系统概况
+cat /proc/loadavg                                            # 系统负载
+ps -eo user,pid,%cpu,%mem,vsz,rss,comm --sort=-%mem | head -15  # 详细进程排行
+sar -u 1 5                                                   # CPU使用率（需安装sysstat）
+watch -n 2 "free -h; echo '---'; df -h /; echo '---'; uptime"  # 实时监控面板
+```
+
+---
+
+### 用户和权限组合
+
+```bash
+id && groups                                                 # 快速查看自己的身份
+last -10                                                     # 最近10条登录记录
+who -b                                                       # 系统上次启动时间
+awk -F: '$3>=1000 && $3<65534 {print $1}' /etc/passwd       # 列出所有普通用户
+grep "Failed password" /var/log/auth.log | tail -20          # 最近的登录失败
+passwd -S username                                           # 查看密码状态
+find / -perm -4000 2>/dev/null                               # 查找所有SUID文件
+getent group sudo                                            # 查看sudo组成员
+```
+
+---
+
+### 文本处理综合组合
+
+```bash
+# JSON处理
+cat data.json | python3 -m json.tool                         # 格式化JSON
+cat data.json | python3 -c "import sys,json; print(json.load(sys.stdin)['key'])"  # 提取字段
+
+# CSV处理
+head -1 data.csv | tr ',' '\n' | cat -n                      # 查看CSV列名和编号
+awk -F',' '{print $1","$3}' data.csv                         # 提取CSV指定列
+sort -t',' -k2 -rn data.csv                                  # 按CSV第2列数字排序
+
+# 日志分析
+awk '{print $4}' access.log | cut -d: -f2 | sort | uniq -c | sort -rn  # 每小时请求量
+grep "500" access.log | awk '{print $7}' | sort | uniq -c | sort -rn   # 500错误的URL排行
+awk '$10 > 1000000' access.log                               # 响应大于1MB的请求
+awk '{sum += $10} END {print sum/1024/1024 " MB"}' access.log  # 总流量
+
+# 多文件操作
+paste file1.txt file2.txt                                    # 按列合并两个文件
+pr -m -t file1 file2                                         # 并排显示两个文件
+diff <(sort file1) <(sort file2)                             # 比较排序后的差异
+```
+
+---
+
+### crontab 实用组合
+
+```bash
+# 每天凌晨3点备份数据库
+0 3 * * * mysqldump -u root -p'pass' dbname | gzip > /backup/db_$(date +\%Y\%m\%d).sql.gz
+
+# 每5分钟检查服务是否存活，挂了就重启
+*/5 * * * * systemctl is-active --quiet nginx || systemctl restart nginx
+
+# 每天清理7天前的日志
+0 2 * * * find /var/log/app/ -name "*.log" -mtime +7 -delete
+
+# 每小时同步代码
+0 * * * * cd /var/www/app && git pull origin main >> /var/log/deploy.log 2>&1
+
+# 每周日凌晨做全量备份
+0 1 * * 0 tar -czf /backup/full_$(date +\%Y\%m\%d).tar.gz /data/
+```
+
+---
+
+### 一行搞定的实用组合
+
+```bash
+# 快速查看服务器状态概况
+echo "=== 系统 ===" && uptime && echo "=== 内存 ===" && free -h && echo "=== 磁盘 ===" && df -h && echo "=== 负载TOP5 ===" && ps aux --sort=-%cpu | head -6
+
+# 查找并杀掉占用某端口的进程
+lsof -ti :8080 | xargs kill -9
+
+# 一键清理系统（Ubuntu）
+sudo apt autoremove -y && sudo apt clean && sudo journalctl --vacuum-time=3d
+
+# 快速创建项目结构
+mkdir -p project/{src,tests,docs,config} && touch project/{README.md,Makefile,.gitignore}
+
+# 导出所有环境变量为 .env 格式
+env | sort | sed 's/=\(.*\)/="\1"/' > .env.backup
+
+# 统计代码仓库各语言行数
+find . -name "*.py" -o -name "*.js" -o -name "*.go" | xargs wc -l | sort -rn | head -20
+
+# 监控某个进程的内存变化
+while true; do ps -o rss= -p $(pgrep app_name) | awk '{print $1/1024"MB"}'; sleep 5; done
+
+# 批量修改文件扩展名
+for f in *.jpeg; do mv "$f" "${f%.jpeg}.jpg"; done
+
+# 查看当前连接最多的IP
+ss -ntu | awk '{print $5}' | cut -d: -f1 | sort | uniq -c | sort -rn | head -10
+```
+
+---
+
+> **提示**：组合命令的核心思想是 **管道（|）** + **命令替换 $()** + **xargs**，掌握这三个就能自由组合出各种强大操作！
